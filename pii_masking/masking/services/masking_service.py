@@ -185,6 +185,24 @@ class DataMaskingService:
         execution = await db.get(WorkflowExecution, execution.id)
         return execution
 
+    def _get_best_odbc_driver(self) -> str:
+        """Get the best available ODBC driver for SQL Server"""
+        if not PYODBC_AVAILABLE:
+            raise ValueError("pyodbc is not available")
+
+        available_drivers = pyodbc.drivers()
+        preferred_drivers = [
+            "ODBC Driver 18 for SQL Server",
+            "ODBC Driver 17 for SQL Server",
+            "SQL Server"
+        ]
+
+        for driver in preferred_drivers:
+            if driver in available_drivers:
+                return driver
+
+        raise ValueError(f"No compatible SQL Server ODBC driver found. Available drivers: {', '.join(available_drivers)}")
+
     def _build_connection_string(
         self,
         connection_type: str,
@@ -196,13 +214,20 @@ class DataMaskingService:
     ) -> str:
         """Build database connection string"""
         if connection_type in ["azure_sql", "sql_server"]:
+            selected_driver = self._get_best_odbc_driver()
+
             conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+                f"DRIVER={{{selected_driver}}};"
                 f"SERVER={server};"
                 f"DATABASE={database or 'master'};"
                 f"UID={username};"
                 f"PWD={password}"
             )
+
+            # Add encryption settings for Azure SQL and newer drivers
+            if connection_type == "azure_sql" or "18" in selected_driver:
+                conn_str += ";Encrypt=yes;TrustServerCertificate=yes"
+
             if port:
                 conn_str = conn_str.replace(f"SERVER={server};", f"SERVER={server},{port};")
             return conn_str

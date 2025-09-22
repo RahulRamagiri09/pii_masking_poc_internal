@@ -221,19 +221,34 @@ class DatabaseService:
             return False, error_msg
 
 
+    def _get_best_odbc_driver(self) -> str:
+        """Get the best available ODBC driver for SQL Server"""
+        available_drivers = pyodbc.drivers()
+        preferred_drivers = [
+            "ODBC Driver 18 for SQL Server",
+            "ODBC Driver 17 for SQL Server",
+            "SQL Server"
+        ]
+
+        for driver in preferred_drivers:
+            if driver in available_drivers:
+                return driver
+
+        raise ValueError(f"No compatible SQL Server ODBC driver found. Available drivers: {', '.join(available_drivers)}")
+
     def _build_azure_sql_connection_string(self, connection: DatabaseConnection, password: str) -> str:
         """Build Azure SQL connection string"""
-        driver = "{ODBC Driver 18 for SQL Server}"
+        selected_driver = self._get_best_odbc_driver()
         port = connection.port or 1433
 
         connection_string = (
-            f"DRIVER={driver};"
+            f"DRIVER={{{selected_driver}}};"
             f"SERVER={connection.server},{port};"
             f"DATABASE={connection.database};"
             f"UID={connection.username};"
             f"PWD={password};"
             f"Encrypt=yes;"
-            f"TrustServerCertificate=no;"
+            f"TrustServerCertificate=yes;"
             f"Connection Timeout=30;"
         )
 

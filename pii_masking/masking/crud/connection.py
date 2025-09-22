@@ -216,13 +216,34 @@ async def test_connection(connection_params: dict) -> tuple[bool, str]:
             if not PYODBC_AVAILABLE:
                 return False, "pyodbc is not installed. Please install Microsoft C++ Build Tools and pyodbc."
 
+            # Dynamically find the best available ODBC driver
+            available_drivers = pyodbc.drivers()
+            preferred_drivers = [
+                "ODBC Driver 18 for SQL Server",
+                "ODBC Driver 17 for SQL Server",
+                "SQL Server"
+            ]
+
+            selected_driver = None
+            for driver in preferred_drivers:
+                if driver in available_drivers:
+                    selected_driver = driver
+                    break
+
+            if not selected_driver:
+                return False, f"No compatible SQL Server ODBC driver found. Available drivers: {', '.join(available_drivers)}"
+
             conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+                f"DRIVER={{{selected_driver}}};"
                 f"SERVER={connection_params['server']};"
                 f"DATABASE={connection_params.get('database', 'master')};"
                 f"UID={connection_params['username']};"
                 f"PWD={connection_params['password']}"
             )
+
+            # Add encryption settings for Azure SQL and newer drivers
+            if connection_type == "azure_sql" or "18" in selected_driver:
+                conn_str += ";Encrypt=yes;TrustServerCertificate=yes"
             if connection_params.get('port'):
                 conn_str = conn_str.replace(
                     f"SERVER={connection_params['server']};",
