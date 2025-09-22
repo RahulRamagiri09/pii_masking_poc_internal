@@ -1,0 +1,4 @@
+Just those 3 commands:
+  1. alembic revision --autogenerate -m "Your message"
+  2. alembic upgrade head
+  3. alembic current (optional - just to verify)
