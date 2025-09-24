@@ -11,7 +11,8 @@ from ..schemas.connection import (
     ConnectionUpdate,
     TestConnectionRequest,
     TestConnectionResponse,
-    TablesResponse
+    TablesResponse,
+    ColumnsResponse
 )
 from ..crud.connection import (
     create_connection,
@@ -21,7 +22,8 @@ from ..crud.connection import (
     delete_connection,
     test_connection,
     get_source_tables,
-    get_destination_tables
+    get_destination_tables,
+    get_table_columns
 )
 from ...core.config import settings
 
@@ -200,6 +202,69 @@ async def get_connection_destination_tables(
 
     return TablesResponse(
         data=tables,
+        success=True
+    )
+
+
+@router.get("/{connection_id}/source_tables/{table_name}/columns", response_model=ColumnsResponse)
+async def get_connection_table_columns(
+    connection_id: int,
+    table_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Get column information for a specific table from a database connection"""
+    if not check_permission(current_user, "read"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to view table columns"
+        )
+
+    # Check if connection exists
+    connection = await get_connection(db, connection_id)
+    if not connection:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Connection not found"
+        )
+
+    # Check ownership unless admin
+    if current_user.role.rolename.lower() != "admin" and connection.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this connection"
+        )
+
+    # Check if connection is active
+    if connection.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Connection is not active. Current status: {connection.status}"
+        )
+
+    # Get table columns
+    success, columns, message = await get_table_columns(db, connection_id, table_name)
+
+    if not success:
+        # Check if it's a decryption error
+        if "decrypt password" in message or "encrypted with a different key" in message:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This connection was created with an old encryption key and cannot be used. Please create a new connection with the same credentials."
+            )
+        elif "not found" in message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=message
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=message
+            )
+
+    return ColumnsResponse(
+        data=columns,
         success=True
     )
 

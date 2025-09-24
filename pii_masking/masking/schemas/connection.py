@@ -65,3 +65,17 @@ class TestConnectionResponse(BaseModel):
 class TablesResponse(BaseModel):
     data: List[str]
     success: bool
+
+
+class ColumnInfo(BaseModel):
+    name: str
+    data_type: str
+    is_nullable: bool
+    max_length: Optional[int] = None
+    precision: Optional[int] = None
+    scale: Optional[int] = None
+
+
+class ColumnsResponse(BaseModel):
+    data: List[ColumnInfo]
+    success: bool
