@@ -21,15 +21,15 @@ class ConnectionStatus(str, Enum):
 class DatabaseConnection(BaseModel):
     __tablename__ = "database_connections"
 
-    name = Column(String, nullable=False, index=True)
-    connection_type = Column(String, nullable=False)
-    server = Column(String, nullable=False)
-    database = Column(String, nullable=True)
-    username = Column(String, nullable=False)
+    name = Column(String(200), nullable=False, index=True)
+    connection_type = Column(String(50), nullable=False)
+    server = Column(String(255), nullable=False)
+    database = Column(String(255), nullable=True)
+    username = Column(String(100), nullable=False)
     password_encrypted = Column(Text, nullable=False)  # Encrypted password
     port = Column(Integer, nullable=True)
     additional_params = Column(JSON, nullable=True, default={})
-    status = Column(String, default=ConnectionStatus.INACTIVE.value)
+    status = Column(String(50), default=ConnectionStatus.INACTIVE.value)
     test_connection_result = Column(Text, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 

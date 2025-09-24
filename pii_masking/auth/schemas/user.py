@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from .role import RoleResponse
 
 
@@ -48,3 +48,17 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
+
+
+class UserInfo(BaseModel):
+    id: int
+    username: str
+    email: str
+    role: str
+    permissions: List[str]
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserInfo

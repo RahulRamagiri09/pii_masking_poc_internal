@@ -8,40 +8,21 @@ from ..schemas.role import RoleCreate, RoleResponse, RoleUpdate
 from ..crud.role import create_role, get_role, get_role_by_name, get_roles, update_role, delete_role
 from .auth import get_current_user
 from ..schemas.user import UserResponse
+from ..dependencies import require_admin_role
 from ...core.config import settings
 
 router = APIRouter()
 
 
-@router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def register_role(
     role: RoleCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: UserResponse = Depends(require_admin_role)
 ):
     """
-    Create a new role.
-
-    Public access is allowed when ALLOW_PUBLIC_ROLE_CREATION=True and no users exist yet.
-    Otherwise, authentication is required.
+    Create a new role. Only Admin users can create new roles.
     """
-    # Check if authentication should be required
-    if not settings.ALLOW_PUBLIC_ROLE_CREATION:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required for role creation"
-        )
-
-    # If public role creation is enabled, check if any users exist
-    if settings.ALLOW_PUBLIC_ROLE_CREATION:
-        from ...crud.user import get_users
-        users = await get_users(db, skip=0, limit=1)
-        if users:
-            # Users exist, authentication should be required
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required - users already exist in system"
-            )
-
     # Check if role already exists
     existing_role = await get_role_by_name(db, role.rolename)
     if existing_role:
@@ -50,16 +31,21 @@ async def register_role(
             detail="Role with this name already exists"
         )
 
-    return await create_role(db, role)
+    return await create_role(db, role, created_by=current_admin.id)
 
 
-@router.get("/", response_model=List[RoleResponse])
+@router.get("", response_model=List[RoleResponse])
 async def read_roles(
     skip: int = 0,
     limit: int = settings.DEFAULT_PAGE_SIZE,
-    db: AsyncSession = Depends(get_db),
-    current_user: UserResponse = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db)
 ):
+    """
+    Get all roles.
+
+    Public access is allowed for initial setup (when no users exist).
+    This allows the initial admin user creation process to work.
+    """
     # Limit the maximum page size
     limit = min(limit, settings.MAX_PAGE_SIZE)
     return await get_roles(db, skip=skip, limit=limit)

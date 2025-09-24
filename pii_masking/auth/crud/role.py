@@ -35,7 +35,7 @@ async def get_roles(
     db: AsyncSession, skip: int, limit: int
 ) -> List[Role]:
     result = await db.execute(
-        select(Role).options(selectinload(Role.users)).offset(skip).limit(limit)
+        select(Role).options(selectinload(Role.users)).order_by(Role.id).offset(skip).limit(limit)
     )
     return result.scalars().all()
 

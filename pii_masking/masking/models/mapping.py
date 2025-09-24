@@ -7,8 +7,8 @@ class TableMapping(BaseModel):
     __tablename__ = "table_mappings"
 
     workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=False)
-    source_table = Column(String, nullable=False)
-    destination_table = Column(String, nullable=False)
+    source_table = Column(String(255), nullable=False)
+    destination_table = Column(String(255), nullable=False)
 
     # Relationships
     workflow = relationship("Workflow", back_populates="table_mappings")
@@ -19,10 +19,10 @@ class ColumnMapping(BaseModel):
     __tablename__ = "column_mappings"
 
     table_mapping_id = Column(Integer, ForeignKey("table_mappings.id"), nullable=False)
-    source_column = Column(String, nullable=False)
-    destination_column = Column(String, nullable=False)
+    source_column = Column(String(255), nullable=False)
+    destination_column = Column(String(255), nullable=False)
     is_pii = Column(Boolean, default=False)
-    pii_attribute = Column(String, nullable=True)  # From predefined PII attributes
+    pii_attribute = Column(String(100), nullable=True)  # From predefined PII attributes
 
     # Relationships
     table_mapping = relationship("TableMapping", back_populates="column_mappings")

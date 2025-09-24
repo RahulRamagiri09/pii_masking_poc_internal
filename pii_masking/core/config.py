@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -8,6 +8,13 @@ class Settings(BaseSettings):
     DATABASE_ECHO: bool
     DATABASE_POOL_SIZE: int
     DATABASE_MAX_OVERFLOW: int
+
+    # Azure SQL Configuration (optional fields)
+    AZURE_SQL_SERVER: Optional[str] = None
+    AZURE_SQL_DATABASE: Optional[str] = None
+    AZURE_SQL_USERNAME: Optional[str] = None
+    AZURE_SQL_PASSWORD: Optional[str] = None
+    AZURE_SQL_PORT: Optional[int] = None
 
     # JWT Authentication
     SECRET_KEY: str
@@ -34,6 +41,7 @@ class Settings(BaseSettings):
     # Security
     BCRYPT_ROUNDS: int
     ALLOW_PUBLIC_ROLE_CREATION: bool
+    ENCRYPTION_KEY: Optional[str] = None
 
     # Pagination
     DEFAULT_PAGE_SIZE: int

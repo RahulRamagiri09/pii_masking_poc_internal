@@ -6,9 +6,9 @@ from ...common.base_model import BaseModel
 class User(BaseModel):
     __tablename__ = "users"
 
-    username = Column(String, unique=True, index=True, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
     role_id = Column(ForeignKey("roles.id"), nullable=False)
 
     role = relationship("Role", back_populates="users")

@@ -13,7 +13,7 @@ from ...core.config import settings
 router = APIRouter()
 
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_endpoint(
     user: UserCreate,
     db: AsyncSession = Depends(get_db),
@@ -44,7 +44,7 @@ async def create_user_endpoint(
     return await create_user(db, user, created_by=current_admin.id)
 
 
-@router.get("/", response_model=List[UserResponse])
+@router.get("", response_model=List[UserResponse])
 async def read_users(
     skip: int = 0,
     limit: int = settings.DEFAULT_PAGE_SIZE,

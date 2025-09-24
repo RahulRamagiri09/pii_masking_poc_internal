@@ -15,11 +15,11 @@ class WorkflowStatus(str, Enum):
 class Workflow(BaseModel):
     __tablename__ = "workflows"
 
-    name = Column(String, nullable=False, index=True)
+    name = Column(String(200), nullable=False, index=True)
     description = Column(Text, nullable=True)
     source_connection_id = Column(Integer, ForeignKey("database_connections.id"), nullable=False)
     destination_connection_id = Column(Integer, ForeignKey("database_connections.id"), nullable=False)
-    status = Column(String, default=WorkflowStatus.DRAFT.value)
+    status = Column(String(50), default=WorkflowStatus.DRAFT.value)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     # Relationships
@@ -34,7 +34,7 @@ class WorkflowExecution(BaseModel):
     __tablename__ = "workflow_executions"
 
     workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=False)
-    status = Column(String, nullable=False)
+    status = Column(String(50), nullable=False)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)

@@ -11,7 +11,8 @@ from ..schemas.workflow import (
     WorkflowUpdate,
     WorkflowExecutionResponse,
     ExecuteWorkflowRequest,
-    ExecuteWorkflowResponse
+    ExecuteWorkflowResponse,
+    PIIAttributesResponse
 )
 from ..crud.workflow import (
     create_workflow,
@@ -22,6 +23,7 @@ from ..crud.workflow import (
     get_workflow_executions
 )
 from ..services.masking_service import DataMaskingService
+from ..models.mapping import PII_ATTRIBUTES
 from ...core.config import settings
 
 router = APIRouter()
@@ -44,7 +46,7 @@ def check_permission(user: UserResponse, operation: str):
     return operation in allowed_operations
 
 
-@router.post("/", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
 async def create_masking_workflow(
     workflow: WorkflowCreate,
     db: AsyncSession = Depends(get_db),
@@ -65,7 +67,7 @@ async def create_masking_workflow(
     )
 
 
-@router.get("/", response_model=List[WorkflowResponse])
+@router.get("", response_model=List[WorkflowResponse])
 async def list_workflows(
     skip: int = 0,
     limit: int = settings.DEFAULT_PAGE_SIZE,
@@ -87,6 +89,23 @@ async def list_workflows(
         return await get_workflows(db, skip=skip, limit=limit)
     else:
         return await get_workflows(db, user_id=current_user.id, skip=skip, limit=limit)
+
+
+@router.get("/pii-attributes", response_model=PIIAttributesResponse)
+async def get_pii_attributes(
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Get list of available PII attributes for masking"""
+    if not check_permission(current_user, "read"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to view PII attributes"
+        )
+
+    return PIIAttributesResponse(
+        data=PII_ATTRIBUTES,
+        success=True
+    )
 
 
 @router.get("/{workflow_id}", response_model=WorkflowResponse)

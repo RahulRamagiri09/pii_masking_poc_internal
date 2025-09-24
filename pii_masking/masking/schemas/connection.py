@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from ..models.connection import ConnectionType, ConnectionStatus
 
@@ -60,3 +60,8 @@ class TestConnectionResponse(BaseModel):
     success: bool
     message: str
     connection_time_ms: Optional[float] = None
+
+
+class TablesResponse(BaseModel):
+    data: List[str]
+    success: bool

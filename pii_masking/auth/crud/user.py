@@ -52,7 +52,7 @@ async def get_users(
     db: AsyncSession, skip: int, limit: int
 ) -> List[User]:
     result = await db.execute(
-        select(User).options(selectinload(User.role)).offset(skip).limit(limit)
+        select(User).options(selectinload(User.role)).order_by(User.id).offset(skip).limit(limit)
     )
     return result.scalars().all()
 

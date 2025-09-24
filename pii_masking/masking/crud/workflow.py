@@ -101,7 +101,7 @@ async def get_workflows(
     if user_id:
         query = query.where(Workflow.user_id == user_id)
 
-    query = query.offset(skip).limit(limit)
+    query = query.order_by(Workflow.id).offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 

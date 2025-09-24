@@ -2,3 +2,9 @@ Just those 3 commands:
   1. alembic revision --autogenerate -m "Your message"
   2. alembic upgrade head
   3. alembic current (optional - just to verify)
+
+python manage_roles.py create Admin
+  python create_first_admin.py rahul rahul@gmail.com Test@123
+
+
+  alembic downgrade -1 

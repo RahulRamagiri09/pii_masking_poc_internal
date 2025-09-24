@@ -10,7 +10,8 @@ from ..schemas.connection import (
     ConnectionResponse,
     ConnectionUpdate,
     TestConnectionRequest,
-    TestConnectionResponse
+    TestConnectionResponse,
+    TablesResponse
 )
 from ..crud.connection import (
     create_connection,
@@ -18,7 +19,9 @@ from ..crud.connection import (
     get_connections,
     update_connection,
     delete_connection,
-    test_connection
+    test_connection,
+    get_source_tables,
+    get_destination_tables
 )
 from ...core.config import settings
 
@@ -42,7 +45,7 @@ def check_permission(user: UserResponse, operation: str):
     return operation in allowed_operations
 
 
-@router.post("/", response_model=ConnectionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ConnectionResponse, status_code=status.HTTP_201_CREATED)
 async def create_database_connection(
     connection: ConnectionCreate,
     db: AsyncSession = Depends(get_db),
@@ -63,7 +66,7 @@ async def create_database_connection(
     )
 
 
-@router.get("/", response_model=List[ConnectionResponse])
+@router.get("", response_model=List[ConnectionResponse])
 async def list_connections(
     skip: int = 0,
     limit: int = settings.DEFAULT_PAGE_SIZE,
@@ -85,6 +88,120 @@ async def list_connections(
         return await get_connections(db, skip=skip, limit=limit)
     else:
         return await get_connections(db, user_id=current_user.id, skip=skip, limit=limit)
+
+
+@router.get("/{connection_id}/source_tables", response_model=TablesResponse)
+async def get_connection_source_tables(
+    connection_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Get list of source tables from a database connection"""
+    if not check_permission(current_user, "read"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to view connection source tables"
+        )
+
+    # Check if connection exists
+    connection = await get_connection(db, connection_id)
+    if not connection:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Connection not found"
+        )
+
+    # Check ownership unless admin
+    if current_user.role.rolename.lower() != "admin" and connection.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this connection"
+        )
+
+    # Check if connection is active
+    if connection.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Connection is not active. Current status: {connection.status}"
+        )
+
+    # Get tables
+    success, tables, message = await get_source_tables(db, connection_id)
+
+    if not success:
+        # Check if it's a decryption error
+        if "decrypt password" in message or "encrypted with a different key" in message:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This connection was created with an old encryption key and cannot be used. Please create a new connection with the same credentials."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=message
+            )
+
+    return TablesResponse(
+        data=tables,
+        success=True
+    )
+
+
+@router.get("/{connection_id}/destination_tables", response_model=TablesResponse)
+async def get_connection_destination_tables(
+    connection_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Get list of destination tables from a database connection"""
+    if not check_permission(current_user, "read"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to view connection destination tables"
+        )
+
+    # Check if connection exists
+    connection = await get_connection(db, connection_id)
+    if not connection:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Connection not found"
+        )
+
+    # Check ownership unless admin
+    if current_user.role.rolename.lower() != "admin" and connection.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this connection"
+        )
+
+    # Check if connection is active
+    if connection.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Connection is not active. Current status: {connection.status}"
+        )
+
+    # Get tables
+    success, tables, message = await get_destination_tables(db, connection_id)
+
+    if not success:
+        # Check if it's a decryption error
+        if "decrypt password" in message or "encrypted with a different key" in message:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This connection was created with an old encryption key and cannot be used. Please create a new connection with the same credentials."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=message
+            )
+
+    return TablesResponse(
+        data=tables,
+        success=True
+    )
 
 
 @router.get("/{connection_id}", response_model=ConnectionResponse)

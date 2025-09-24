@@ -73,3 +73,8 @@ class ExecuteWorkflowResponse(BaseModel):
     execution_id: int
     message: str
     status: WorkflowStatus
+
+
+class PIIAttributesResponse(BaseModel):
+    data: List[str]
+    success: bool
