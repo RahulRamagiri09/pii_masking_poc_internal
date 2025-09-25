@@ -27,6 +27,31 @@ from ..crud.connection import get_connection
 logger = logging.getLogger(__name__)
 
 
+def handle_datetimeoffset(dto_value):
+    """Convert DATETIMEOFFSET to string representation"""
+    # Return the raw string representation
+    return str(dto_value) if dto_value else None
+
+
+def configure_pyodbc_converters():
+    """Configure pyodbc to handle special SQL Server data types"""
+    if PYODBC_AVAILABLE:
+        try:
+            # -155 is SQL_SS_TIMESTAMPOFFSET (DATETIMEOFFSET)
+            # This may not be available in all pyodbc versions
+            if hasattr(pyodbc, 'add_output_converter'):
+                pyodbc.add_output_converter(-155, handle_datetimeoffset)
+            else:
+                logger.warning("pyodbc.add_output_converter not available, DATETIMEOFFSET columns will be handled via SQL casting")
+        except Exception as e:
+            logger.warning(f"Failed to configure pyodbc converters: {e}")
+
+
+# Configure converters globally when module loads
+if PYODBC_AVAILABLE:
+    configure_pyodbc_converters()
+
+
 def hash_seed(text):
     """Generate a consistent integer seed from input text"""
     if not text or not isinstance(text, str):
@@ -124,8 +149,11 @@ class DataMaskingService:
                 raise ValueError("Source or destination connection not found")
 
             # Decrypt passwords
-            source_password = decrypt_password(source_conn.password_encrypted)
-            dest_password = decrypt_password(dest_conn.password_encrypted)
+            try:
+                source_password = decrypt_password(source_conn.password_encrypted)
+                dest_password = decrypt_password(dest_conn.password_encrypted)
+            except Exception as e:
+                raise ValueError(f"Failed to decrypt connection passwords. Connections may have been created with a different encryption key. Error: {str(e)}")
 
             # Build connection strings
             source_conn_str = self._build_connection_string(
@@ -181,8 +209,7 @@ class DataMaskingService:
                 execution_logs=execution_logs
             )
 
-        # Reload and return execution
-        execution = await db.get(WorkflowExecution, execution.id)
+        # Return execution object (no need to reload from database)
         return execution
 
     def _get_best_odbc_driver(self) -> str:
@@ -286,13 +313,23 @@ class DataMaskingService:
         execution_logs: List[str]
     ) -> int:
         """Synchronous data processing for use with executor"""
+        # Ensure converters are configured in this thread
+        if PYODBC_AVAILABLE:
+            configure_pyodbc_converters()
+
         records_processed = 0
 
         with pyodbc.connect(source_conn_str, timeout=60) as source_conn:
             cursor = source_conn.cursor()
 
-            # Build SELECT query
-            select_query = f"SELECT {', '.join(source_columns)} FROM {table_mapping.source_table}"
+            # Build SELECT query with type casting for problematic data types
+            # Cast DATETIMEOFFSET and other complex types to NVARCHAR for safe handling
+            casted_columns = []
+            for col in source_columns:
+                # Use TRY_CAST to safely convert potentially problematic columns
+                casted_columns.append(f"TRY_CAST([{col}] AS NVARCHAR(MAX)) AS [{col}]")
+
+            select_query = f"SELECT {', '.join(casted_columns)} FROM {table_mapping.source_table}"
             cursor.execute(select_query)
 
             # Fetch data in batches
@@ -343,11 +380,52 @@ class DataMaskingService:
 
         return records_processed
 
+    def _get_identity_columns(self, dest_conn_str: str, table_name: str) -> List[str]:
+        """Get list of identity columns for a table"""
+        if not PYODBC_AVAILABLE:
+            return []
+
+        # Ensure converters are configured in this thread
+        configure_pyodbc_converters()
+
+        identity_columns = []
+        try:
+            with pyodbc.connect(dest_conn_str, timeout=60) as dest_conn:
+                cursor = dest_conn.cursor()
+
+                # Query to find identity columns using sys.columns and sys.tables
+                identity_query = """
+                    SELECT c.name AS COLUMN_NAME
+                    FROM sys.columns c
+                    INNER JOIN sys.tables t ON c.object_id = t.object_id
+                    WHERE t.name = ? AND c.is_identity = 1
+                """
+
+                cursor.execute(identity_query, (table_name,))
+                rows = cursor.fetchall()
+                identity_columns = [row[0] for row in rows]
+
+                if identity_columns:
+                    logger.info(f"Found identity columns in table {table_name}: {identity_columns}")
+                else:
+                    logger.info(f"No identity columns found in table {table_name}")
+
+        except Exception as e:
+            logger.error(f"Error detecting identity columns for table {table_name}: {e}")
+            # Return empty list to allow insert to proceed (may fail but won't crash detection)
+            return []
+
+        return identity_columns
+
     async def _clear_destination_table(self, dest_conn_str: str, table_name: str):
         """Clear all data from destination table"""
         loop = asyncio.get_event_loop()
 
         def clear_sync():
+            # Ensure converters are configured in this thread
+            if PYODBC_AVAILABLE:
+                configure_pyodbc_converters()
+
             with pyodbc.connect(dest_conn_str, timeout=60) as dest_conn:
                 cursor = dest_conn.cursor()
                 delete_query = f"DELETE FROM [{table_name}]"
@@ -366,15 +444,45 @@ class DataMaskingService:
         data: List[List[Any]]
     ):
         """Synchronous insert of masked data"""
+        # Ensure converters are configured in this thread
+        if PYODBC_AVAILABLE:
+            configure_pyodbc_converters()
+
+        # Get identity columns to exclude from INSERT
+        identity_columns = self._get_identity_columns(dest_conn_str, table_name)
+
+        # Filter out identity columns from columns and corresponding data
+        filtered_columns = []
+        identity_indices = []
+
+        for i, col in enumerate(columns):
+            if col in identity_columns:
+                identity_indices.append(i)
+            else:
+                filtered_columns.append(col)
+
+        # If no non-identity columns to insert, skip insertion
+        if not filtered_columns:
+            logger.warning(f"Table {table_name} contains only identity columns, skipping data insertion")
+            return
+
+        # Filter data to exclude identity column values
+        filtered_data = []
+        for row in data:
+            filtered_row = [row[i] for i in range(len(row)) if i not in identity_indices]
+            filtered_data.append(filtered_row)
+
         with pyodbc.connect(dest_conn_str, timeout=60) as dest_conn:
             cursor = dest_conn.cursor()
 
-            # Build INSERT query
-            placeholders = ', '.join(['?' for _ in columns])
-            insert_query = f"INSERT INTO [{table_name}] ([{'], ['.join(columns)}]) VALUES ({placeholders})"
+            # Build INSERT query with filtered columns
+            placeholders = ', '.join(['?' for _ in filtered_columns])
+            insert_query = f"INSERT INTO [{table_name}] ([{'], ['.join(filtered_columns)}]) VALUES ({placeholders})"
+
+            logger.info(f"Inserting data into {table_name} excluding identity columns: {identity_columns}")
 
             # Execute batch insert
-            cursor.executemany(insert_query, data)
+            cursor.executemany(insert_query, filtered_data)
             dest_conn.commit()
 
     def generate_sample_masked_data(
