@@ -14,13 +14,17 @@ except ImportError:
     PYODBC_AVAILABLE = False
     logging.warning("pyodbc not installed. SQL Server connections will not be available.")
 
+# Flag to track if pyodbc converter warning has been shown
+_converter_warning_shown = False
+
 from ..models.workflow import Workflow, WorkflowExecution, WorkflowStatus
 from ..models.mapping import ColumnMapping
 from ..crud.connection import decrypt_password
 from ..crud.workflow import (
     get_workflow,
     update_workflow_execution,
-    create_workflow_execution
+    create_workflow_execution,
+    update_workflow_status
 )
 from ..crud.connection import get_connection
 
@@ -35,6 +39,7 @@ def handle_datetimeoffset(dto_value):
 
 def configure_pyodbc_converters():
     """Configure pyodbc to handle special SQL Server data types"""
+    global _converter_warning_shown
     if PYODBC_AVAILABLE:
         try:
             # -155 is SQL_SS_TIMESTAMPOFFSET (DATETIMEOFFSET)
@@ -42,9 +47,13 @@ def configure_pyodbc_converters():
             if hasattr(pyodbc, 'add_output_converter'):
                 pyodbc.add_output_converter(-155, handle_datetimeoffset)
             else:
-                logger.warning("pyodbc.add_output_converter not available, DATETIMEOFFSET columns will be handled via SQL casting")
+                if not _converter_warning_shown:
+                    logger.warning("pyodbc.add_output_converter not available, DATETIMEOFFSET columns will be handled via SQL casting")
+                    _converter_warning_shown = True
         except Exception as e:
-            logger.warning(f"Failed to configure pyodbc converters: {e}")
+            if not _converter_warning_shown:
+                logger.warning(f"Failed to configure pyodbc converters: {e}")
+                _converter_warning_shown = True
 
 
 # Configure converters globally when module loads
@@ -195,6 +204,9 @@ class DataMaskingService:
                 execution_logs=execution_logs
             )
 
+            # Update main workflow status to completed
+            await update_workflow_status(db, workflow_id, WorkflowStatus.COMPLETED)
+
             execution_logs.append(f"Workflow completed successfully. Total records: {total_records}")
 
         except Exception as e:
@@ -208,6 +220,9 @@ class DataMaskingService:
                 error_message=str(e),
                 execution_logs=execution_logs
             )
+
+            # Update main workflow status to failed
+            await update_workflow_status(db, workflow_id, WorkflowStatus.FAILED)
 
         # Return execution object (no need to reload from database)
         return execution
@@ -313,9 +328,6 @@ class DataMaskingService:
         execution_logs: List[str]
     ) -> int:
         """Synchronous data processing for use with executor"""
-        # Ensure converters are configured in this thread
-        if PYODBC_AVAILABLE:
-            configure_pyodbc_converters()
 
         records_processed = 0
 
@@ -385,9 +397,6 @@ class DataMaskingService:
         if not PYODBC_AVAILABLE:
             return []
 
-        # Ensure converters are configured in this thread
-        configure_pyodbc_converters()
-
         identity_columns = []
         try:
             with pyodbc.connect(dest_conn_str, timeout=60) as dest_conn:
@@ -422,10 +431,6 @@ class DataMaskingService:
         loop = asyncio.get_event_loop()
 
         def clear_sync():
-            # Ensure converters are configured in this thread
-            if PYODBC_AVAILABLE:
-                configure_pyodbc_converters()
-
             with pyodbc.connect(dest_conn_str, timeout=60) as dest_conn:
                 cursor = dest_conn.cursor()
                 delete_query = f"DELETE FROM [{table_name}]"
@@ -444,9 +449,6 @@ class DataMaskingService:
         data: List[List[Any]]
     ):
         """Synchronous insert of masked data"""
-        # Ensure converters are configured in this thread
-        if PYODBC_AVAILABLE:
-            configure_pyodbc_converters()
 
         # Get identity columns to exclude from INSERT
         identity_columns = self._get_identity_columns(dest_conn_str, table_name)

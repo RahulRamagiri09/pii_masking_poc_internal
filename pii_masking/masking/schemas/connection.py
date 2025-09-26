@@ -45,6 +45,17 @@ class ConnectionResponse(ConnectionBase):
         from_attributes = True
 
 
+class ConnectionSimpleResponse(ConnectionBase):
+    """Simplified connection response without audit fields"""
+    id: int
+    status: ConnectionStatus
+    test_connection_result: Optional[str] = None
+    user_id: int
+
+    class Config:
+        from_attributes = True
+
+
 class TestConnectionRequest(BaseModel):
     connection_type: ConnectionType
     server: str

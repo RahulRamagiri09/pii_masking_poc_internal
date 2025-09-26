@@ -2,8 +2,8 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 from ..models.workflow import WorkflowStatus
-from .mapping import TableMappingCreate, TableMappingResponse
-from .connection import ConnectionResponse
+from .mapping import TableMappingCreate, TableMappingResponse, TableMappingSimpleResponse
+from .connection import ConnectionResponse, ConnectionSimpleResponse
 
 
 class WorkflowBase(BaseModel):
@@ -32,9 +32,9 @@ class WorkflowResponse(WorkflowBase):
     destination_connection_id: int
     status: WorkflowStatus
     user_id: int
-    table_mappings: List[TableMappingResponse] = []
-    source_connection: Optional[ConnectionResponse] = None
-    destination_connection: Optional[ConnectionResponse] = None
+    table_mappings: List[TableMappingSimpleResponse] = []
+    source_connection: Optional[ConnectionSimpleResponse] = None
+    destination_connection: Optional[ConnectionSimpleResponse] = None
     created_by: Optional[int] = None
     created_at: datetime
     updated_by: Optional[int] = None

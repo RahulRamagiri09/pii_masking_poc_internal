@@ -248,6 +248,25 @@ async def update_workflow_execution(
     return execution
 
 
+async def update_workflow_status(
+    db: AsyncSession,
+    workflow_id: int,
+    status: WorkflowStatus
+) -> Optional[Workflow]:
+    """Update workflow status after execution"""
+    result = await db.execute(
+        select(Workflow).where(Workflow.id == workflow_id)
+    )
+    workflow = result.scalar_one_or_none()
+
+    if workflow:
+        workflow.status = status.value
+        await db.commit()
+        await db.refresh(workflow)
+
+    return workflow
+
+
 async def get_workflow_executions(
     db: AsyncSession,
     workflow_id: int,

@@ -34,6 +34,13 @@ class ColumnMappingResponse(ColumnMappingBase):
         from_attributes = True
 
 
+class ColumnMappingSimpleResponse(ColumnMappingBase):
+    """Simplified column mapping response without audit fields"""
+
+    class Config:
+        from_attributes = True
+
+
 class TableMappingBase(BaseModel):
     source_table: str = Field(..., min_length=1)
     destination_table: str = Field(..., min_length=1)
@@ -52,12 +59,22 @@ class TableMappingUpdate(BaseModel):
 class TableMappingResponse(TableMappingBase):
     id: int
     workflow_id: int
-    column_mappings: List[ColumnMappingResponse] = []
+    column_mappings: List[ColumnMappingSimpleResponse] = []
     created_by: Optional[int] = None
     created_at: datetime
     updated_by: Optional[int] = None
     updated_at: Optional[datetime] = None
     is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class TableMappingSimpleResponse(TableMappingBase):
+    """Simplified table mapping response without audit fields"""
+    id: int
+    workflow_id: int
+    column_mappings: List[ColumnMappingSimpleResponse] = []
 
     class Config:
         from_attributes = True
