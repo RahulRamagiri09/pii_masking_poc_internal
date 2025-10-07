@@ -10,4 +10,5 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 faker==20.1.0
 pyodbc
+psycopg2-binary==2.9.9
 cryptography==41.0.7

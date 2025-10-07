@@ -77,44 +77,33 @@ async def execute_masking(
     db: AsyncSession = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user)
 ):
-    """Execute a masking workflow"""
-    if not check_permission(current_user, "execute"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions to execute workflows"
-        )
+    """
+    DEPRECATED: This endpoint executes workflows synchronously and can cause timeouts.
 
-    # Check if workflow exists
-    workflow = await get_workflow(db, workflow_id)
-    if not workflow:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workflow not found"
-        )
+    Please use the async endpoint instead:
+    POST /api/workflows/{workflow_id}/execute
 
-    # Check ownership unless admin
-    if current_user.role.rolename.lower() != "admin" and workflow.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to execute this workflow"
-        )
-
-    # Execute workflow
-    masking_service = DataMaskingService()
-    try:
-        execution = await masking_service.execute_workflow(db, workflow_id, current_user.id)
-
-        return MaskingExecuteResponse(
-            data=MaskingExecuteData(
-                execution_id=str(execution.id),
-                started_at=execution.started_at or execution.created_at,
-                status=execution.status
-            ),
-            message="workflow execution started",
-            success=True
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to execute workflow: {str(e)}"
-        )
+    This endpoint will be removed in a future version.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "error": "This endpoint is deprecated and has been removed",
+            "reason": "Synchronous execution causes timeouts for large datasets",
+            "solution": "Use the async Celery-based endpoint instead",
+            "correct_endpoint": f"/api/workflows/{workflow_id}/execute",
+            "correct_method": "POST",
+            "migration_guide": {
+                "step_1": f"Change your request URL to: POST /api/workflows/{workflow_id}/execute",
+                "step_2": "The response will include a task_id and execution_id",
+                "step_3": f"Poll GET /api/workflows/{workflow_id}/executions/{{execution_id}}/status for progress",
+                "step_4": "Check for status: queued -> running -> completed/failed"
+            },
+            "benefits": [
+                "No timeout issues - returns immediately",
+                "Background processing with Celery",
+                "Real-time progress tracking",
+                "Proper error handling and retries"
+            ]
+        }
+    )

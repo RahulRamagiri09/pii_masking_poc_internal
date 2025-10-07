@@ -55,6 +55,7 @@ class WorkflowExecutionResponse(BaseModel):
     records_processed: int = 0
     execution_logs: List[str] = []
     user_id: int
+
     created_by: Optional[int] = None
     created_at: datetime
     updated_by: Optional[int] = None
@@ -71,8 +72,9 @@ class ExecuteWorkflowRequest(BaseModel):
 
 class ExecuteWorkflowResponse(BaseModel):
     execution_id: int
+    workflow_id: int
     message: str
-    status: WorkflowStatus
+    status: str
 
 
 class PIIAttributesResponse(BaseModel):

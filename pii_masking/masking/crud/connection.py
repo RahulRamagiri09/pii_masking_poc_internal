@@ -164,14 +164,14 @@ async def update_connection(
 
 
 async def delete_connection(db: AsyncSession, connection_id: int) -> bool:
-    """Delete a database connection (soft delete)"""
+    """Delete a database connection (hard delete - permanently removes record)"""
     result = await db.execute(
         select(DatabaseConnection).where(DatabaseConnection.id == connection_id)
     )
     db_connection = result.scalar_one_or_none()
 
     if db_connection:
-        db_connection.is_active = False
+        await db.delete(db_connection)
         await db.commit()
         return True
 

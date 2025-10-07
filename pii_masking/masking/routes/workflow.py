@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
+import logging
 
 from ...core.database import get_db
 from ...auth.routes.auth import get_current_user
@@ -20,13 +21,16 @@ from ..crud.workflow import (
     get_workflows,
     update_workflow,
     delete_workflow,
-    get_workflow_executions
+    get_workflow_executions,
+    create_workflow_execution,
+    update_workflow_execution
 )
 from ..services.masking_service import DataMaskingService
 from ..models.mapping import PII_ATTRIBUTES
 from ...core.config import settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def check_permission(user: UserResponse, operation: str):
@@ -219,7 +223,7 @@ async def execute_masking_workflow(
     db: AsyncSession = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user)
 ):
-    """Execute a masking workflow"""
+    """Execute a masking workflow synchronously"""
     if not check_permission(current_user, "execute"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -241,15 +245,41 @@ async def execute_masking_workflow(
             detail="You don't have permission to execute this workflow"
         )
 
-    # Execute workflow
-    masking_service = DataMaskingService()
-    execution = await masking_service.execute_workflow(db, workflow_id, current_user.id)
+    # Create execution record with RUNNING status
+    from ..models.workflow import WorkflowStatus
+    execution = await create_workflow_execution(db, workflow_id, current_user.id, WorkflowStatus.RUNNING)
 
-    return ExecuteWorkflowResponse(
-        execution_id=execution.id,
-        message=f"Workflow execution {'completed' if execution.status == 'completed' else 'started'}",
-        status=execution.status
-    )
+    # Execute workflow directly (synchronously)
+    masking_service = DataMaskingService()
+
+    try:
+        execution_result = await masking_service.execute_workflow(
+            db=db,
+            workflow_id=workflow_id,
+            user_id=current_user.id,
+            execution_id=execution.id
+        )
+
+        logger.info(
+            f"Workflow execution completed: workflow_id={workflow_id}, "
+            f"execution_id={execution.id}, records_processed={execution_result.records_processed}"
+        )
+
+        return ExecuteWorkflowResponse(
+            execution_id=execution.id,
+            workflow_id=workflow_id,
+            message=f"Workflow execution completed successfully. {execution_result.records_processed} records processed.",
+            status="completed"
+        )
+    except Exception as e:
+        logger.error(f"Workflow execution failed: {e}", exc_info=True)
+
+        return ExecuteWorkflowResponse(
+            execution_id=execution.id,
+            workflow_id=workflow_id,
+            message=f"Workflow execution failed: {str(e)}",
+            status="failed"
+        )
 
 
 @router.get("/{workflow_id}/executions", response_model=List[WorkflowExecutionResponse])
@@ -286,3 +316,58 @@ async def get_workflow_execution_history(
     limit = min(limit, settings.MAX_PAGE_SIZE)
 
     return await get_workflow_executions(db, workflow_id, skip, limit)
+
+
+@router.get("/{workflow_id}/executions/{execution_id}/status")
+async def get_execution_status(
+    workflow_id: int,
+    execution_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """Get detailed status of a workflow execution"""
+    if not check_permission(current_user, "read"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to view execution status"
+        )
+
+    # Check if workflow exists
+    workflow = await get_workflow(db, workflow_id)
+    if not workflow:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow not found"
+        )
+
+    # Check ownership unless admin
+    if current_user.role.rolename.lower() != "admin" and workflow.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this workflow's execution status"
+        )
+
+    # Get execution from database
+    from ..crud.workflow import get_workflow_execution_by_id
+    execution = await get_workflow_execution_by_id(db, execution_id)
+
+    if not execution:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Execution {execution_id} not found"
+        )
+
+    # Return execution status
+    return {
+        "execution_id": execution.id,
+        "workflow_id": execution.workflow_id,
+        "status": execution.status,
+        "started_at": execution.started_at.isoformat() if execution.started_at else None,
+        "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
+        "records_processed": execution.records_processed,
+        "error_message": execution.error_message,
+        "execution_logs": execution.execution_logs or [],
+        "user_id": execution.user_id
+    }
+
+

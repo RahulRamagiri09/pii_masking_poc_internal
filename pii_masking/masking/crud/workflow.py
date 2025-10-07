@@ -201,12 +201,13 @@ async def delete_workflow(db: AsyncSession, workflow_id: int) -> bool:
 async def create_workflow_execution(
     db: AsyncSession,
     workflow_id: int,
-    user_id: int
+    user_id: int,
+    status: WorkflowStatus = WorkflowStatus.RUNNING
 ) -> WorkflowExecution:
     """Create a new workflow execution"""
     execution = WorkflowExecution(
         workflow_id=workflow_id,
-        status=WorkflowStatus.RUNNING.value,
+        status=status.value,
         started_at=datetime.utcnow(),
         user_id=user_id,
         created_by=user_id
@@ -282,3 +283,16 @@ async def get_workflow_executions(
         .limit(limit)
     )
     return result.scalars().all()
+
+
+async def get_workflow_execution_by_id(
+    db: AsyncSession,
+    execution_id: int
+) -> Optional[WorkflowExecution]:
+    """Get a workflow execution by ID"""
+    result = await db.execute(
+        select(WorkflowExecution).where(WorkflowExecution.id == execution_id)
+    )
+    return result.scalar_one_or_none()
+
+

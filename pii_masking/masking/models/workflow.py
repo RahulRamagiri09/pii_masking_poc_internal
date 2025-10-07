@@ -7,6 +7,7 @@ from ...common.base_model import BaseModel
 class WorkflowStatus(str, Enum):
     DRAFT = "draft"
     READY = "ready"
+    QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
