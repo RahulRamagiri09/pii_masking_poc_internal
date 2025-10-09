@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import logging
+import asyncio
 
 from ...core.database import get_db
 from ...auth.routes.auth import get_current_user
@@ -251,7 +252,6 @@ async def _execute_workflow_background(
 @router.post("/{workflow_id}/execute", response_model=ExecuteWorkflowResponse)
 async def execute_masking_workflow(
     workflow_id: int,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user)
 ):
@@ -281,12 +281,14 @@ async def execute_masking_workflow(
     from ..models.workflow import WorkflowStatus
     execution = await create_workflow_execution(db, workflow_id, current_user.id, WorkflowStatus.RUNNING)
 
-    # Add the workflow execution task to background tasks
-    background_tasks.add_task(
-        _execute_workflow_background,
-        workflow_id,
-        execution.id,
-        current_user.id
+    # Create independent async task (fire and forget - runs independently in event loop)
+    # This prevents blocking other API requests
+    asyncio.create_task(
+        _execute_workflow_background(
+            workflow_id,
+            execution.id,
+            current_user.id
+        )
     )
 
     logger.info(

@@ -91,45 +91,72 @@ class DataMaskingService:
     def __init__(self):
         self.faker = Faker()
 
+        # Create pool of Faker instances for reuse (performance optimization)
+        self._faker_pool = [Faker() for _ in range(100)]
+
         # Mapping of PII attributes to Faker methods with deterministic approach
         self.pii_mapping = {
-            'address': lambda val: get_deterministic_faker(hash_seed(val)).address(),
-            'city': lambda val: get_deterministic_faker(hash_seed(val)).city(),
-            'city_prefix': lambda val: get_deterministic_faker(hash_seed(val)).city_prefix(),
-            'city_suffix': lambda val: get_deterministic_faker(hash_seed(val)).city_suffix(),
-            'company': lambda val: get_deterministic_faker(hash_seed(val)).company(),
-            'company_email': lambda val: get_deterministic_faker(hash_seed(val)).company_email(),
-            'company_suffix': lambda val: get_deterministic_faker(hash_seed(val)).company_suffix(),
-            'country': lambda val: get_deterministic_faker(hash_seed(val)).country(),
-            'country_calling_code': lambda val: get_deterministic_faker(hash_seed(val)).country_calling_code(),
-            'country_code': lambda val: get_deterministic_faker(hash_seed(val)).country_code(),
-            'date_of_birth': lambda val: str(get_deterministic_faker(hash_seed(val)).date_of_birth()),
-            'email': lambda val: get_deterministic_faker(hash_seed(val)).email(),
-            'first_name': lambda val: get_deterministic_faker(hash_seed(val)).first_name(),
-            'job': lambda val: get_deterministic_faker(hash_seed(val)).job(),
-            'last_name': lambda val: get_deterministic_faker(hash_seed(val)).last_name(),
-            'name': lambda val: get_deterministic_faker(hash_seed(val)).name(),
-            'passport_dob': lambda val: str(get_deterministic_faker(hash_seed(val)).passport_dob()),
-            'passport_full': lambda val: str(get_deterministic_faker(hash_seed(val)).passport_full()),
-            'passport_gender': lambda val: get_deterministic_faker(hash_seed(val)).passport_gender(),
-            'passport_number': lambda val: get_deterministic_faker(hash_seed(val)).passport_number(),
-            'passport_owner': lambda val: str(get_deterministic_faker(hash_seed(val)).passport_owner()),
-            'phone_number': lambda val: get_deterministic_faker(hash_seed(val)).phone_number(),
-            'postalcode': lambda val: get_deterministic_faker(hash_seed(val)).postcode(),
-            'postcode': lambda val: get_deterministic_faker(hash_seed(val)).postcode(),
-            'profile': lambda val: str(get_deterministic_faker(hash_seed(val)).profile()),
-            'secondary_address': lambda val: get_deterministic_faker(hash_seed(val)).secondary_address(),
-            'simple_profile': lambda val: str(get_deterministic_faker(hash_seed(val)).simple_profile()),
-            'ssn': lambda val: get_deterministic_faker(hash_seed(val)).ssn(),
-            'state': lambda val: get_deterministic_faker(hash_seed(val)).state(),
-            'state_abbr': lambda val: get_deterministic_faker(hash_seed(val)).state_abbr(),
-            'street_address': lambda val: get_deterministic_faker(hash_seed(val)).street_address(),
-            'street_name': lambda val: get_deterministic_faker(hash_seed(val)).street_name(),
-            'street_suffix': lambda val: get_deterministic_faker(hash_seed(val)).street_suffix(),
-            'zipcode': lambda val: get_deterministic_faker(hash_seed(val)).zipcode(),
-            'zipcode_in_state': lambda val: get_deterministic_faker(hash_seed(val)).zipcode_in_state(),
-            'zipcode_plus4': lambda val: get_deterministic_faker(hash_seed(val)).zipcode_plus4(),
+            'address': lambda val: self._get_deterministic_masked_value(val, 'address'),
+            'city': lambda val: self._get_deterministic_masked_value(val, 'city'),
+            'city_prefix': lambda val: self._get_deterministic_masked_value(val, 'city_prefix'),
+            'city_suffix': lambda val: self._get_deterministic_masked_value(val, 'city_suffix'),
+            'company': lambda val: self._get_deterministic_masked_value(val, 'company'),
+            'company_email': lambda val: self._get_deterministic_masked_value(val, 'company_email'),
+            'company_suffix': lambda val: self._get_deterministic_masked_value(val, 'company_suffix'),
+            'country': lambda val: self._get_deterministic_masked_value(val, 'country'),
+            'country_calling_code': lambda val: self._get_deterministic_masked_value(val, 'country_calling_code'),
+            'country_code': lambda val: self._get_deterministic_masked_value(val, 'country_code'),
+            'date_of_birth': lambda val: self._get_deterministic_masked_value(val, 'date_of_birth'),
+            'email': lambda val: self._get_deterministic_masked_value(val, 'email'),
+            'first_name': lambda val: self._get_deterministic_masked_value(val, 'first_name'),
+            'job': lambda val: self._get_deterministic_masked_value(val, 'job'),
+            'last_name': lambda val: self._get_deterministic_masked_value(val, 'last_name'),
+            'name': lambda val: self._get_deterministic_masked_value(val, 'name'),
+            'passport_dob': lambda val: self._get_deterministic_masked_value(val, 'passport_dob'),
+            'passport_full': lambda val: self._get_deterministic_masked_value(val, 'passport_full'),
+            'passport_gender': lambda val: self._get_deterministic_masked_value(val, 'passport_gender'),
+            'passport_number': lambda val: self._get_deterministic_masked_value(val, 'passport_number'),
+            'passport_owner': lambda val: self._get_deterministic_masked_value(val, 'passport_owner'),
+            'phone_number': lambda val: self._get_deterministic_masked_value(val, 'phone_number'),
+            'postalcode': lambda val: self._get_deterministic_masked_value(val, 'postcode'),
+            'postcode': lambda val: self._get_deterministic_masked_value(val, 'postcode'),
+            'profile': lambda val: self._get_deterministic_masked_value(val, 'profile'),
+            'secondary_address': lambda val: self._get_deterministic_masked_value(val, 'secondary_address'),
+            'simple_profile': lambda val: self._get_deterministic_masked_value(val, 'simple_profile'),
+            'ssn': lambda val: self._get_deterministic_masked_value(val, 'ssn'),
+            'state': lambda val: self._get_deterministic_masked_value(val, 'state'),
+            'state_abbr': lambda val: self._get_deterministic_masked_value(val, 'state_abbr'),
+            'street_address': lambda val: self._get_deterministic_masked_value(val, 'street_address'),
+            'street_name': lambda val: self._get_deterministic_masked_value(val, 'street_name'),
+            'street_suffix': lambda val: self._get_deterministic_masked_value(val, 'street_suffix'),
+            'zipcode': lambda val: self._get_deterministic_masked_value(val, 'zipcode'),
+            'zipcode_in_state': lambda val: self._get_deterministic_masked_value(val, 'zipcode_in_state'),
+            'zipcode_plus4': lambda val: self._get_deterministic_masked_value(val, 'zipcode_plus4'),
         }
+
+    def _get_deterministic_masked_value(self, original_value: str, faker_method: str) -> str:
+        """
+        Get deterministic masked value using Faker pool for performance.
+        Same input will always produce same output.
+        """
+        # Calculate hash seed from original value
+        seed = hash_seed(original_value)
+
+        # Get Faker instance from pool using modulo to distribute across pool
+        faker_instance = self._faker_pool[seed % 100]
+
+        # Seed the Faker instance for deterministic output
+        faker_instance.seed_instance(seed)
+
+        # Call the appropriate Faker method
+        method = getattr(faker_instance, faker_method)
+        result = method()
+
+        # Convert to string if needed (for date objects, etc.)
+        if not isinstance(result, str):
+            result = str(result)
+
+        return result
 
     async def execute_workflow(
         self,
@@ -451,6 +478,10 @@ class DataMaskingService:
                 dest_columns
             )
 
+            # Cache identity columns query (query once instead of per batch)
+            identity_columns = self._get_identity_columns(dest_conn_str, table_mapping.destination_table)
+            logger.info(f"Cached identity columns for {table_mapping.destination_table}: {identity_columns}")
+
             # Process data in executor to avoid blocking
             loop = asyncio.get_event_loop()
             records_processed = await loop.run_in_executor(
@@ -465,7 +496,8 @@ class DataMaskingService:
                 column_max_lengths,
                 db,
                 execution_id,
-                loop
+                loop,
+                identity_columns
             )
 
             # Log completion
@@ -509,7 +541,8 @@ class DataMaskingService:
         column_max_lengths: Dict[str, Optional[int]] = None,
         db: AsyncSession = None,
         execution_id: int = None,
-        loop = None
+        loop = None,
+        identity_columns: List[str] = None
     ) -> int:
         """Synchronous data processing for use with executor"""
         source_conn_type = self._get_connection_type(source_conn_str)
@@ -542,7 +575,7 @@ class DataMaskingService:
                 cursor.execute(select_query)
 
                 # Fetch data in batches
-                batch_size = 1000
+                batch_size = 2000
                 batch_num = 0
 
                 while True:
@@ -554,12 +587,12 @@ class DataMaskingService:
                     logger.info(f"Processing batch {batch_num}: {len(rows)} rows")
 
                     # Process and mask data
-                    masked_rows = self._mask_rows(rows, table_mapping)
+                    masked_rows = self._mask_rows(rows, table_mapping, dest_columns, column_max_lengths)
 
-                    # Insert masked data into destination
+                    # Insert masked data into destination (pass cached identity_columns)
                     self._insert_masked_data_sync(
                         dest_conn_str, table_mapping.destination_table,
-                        dest_columns, masked_rows
+                        dest_columns, masked_rows, identity_columns
                     )
 
                     records_processed += len(masked_rows)
@@ -578,7 +611,7 @@ class DataMaskingService:
             try:
                 logger.info(f"Connecting to source PostgreSQL database...")
                 with psycopg2.connect(source_conn_str) as source_conn:
-                    cursor = source_conn.cursor()
+                    source_cursor = source_conn.cursor()
 
                     # Build SELECT query - keep original types, PostgreSQL driver handles conversion
                     quoted_columns = [f'"{col}"' for col in source_columns]
@@ -586,12 +619,12 @@ class DataMaskingService:
                     logger.info(f"Executing query: {select_query}")
                     execution_logs.append(f"Fetching data from source table: {table_mapping.source_table}")
 
-                    cursor.execute(select_query)
+                    source_cursor.execute(select_query)
 
                     # Get total count for logging
                     count_query = f"SELECT COUNT(*) FROM {table_mapping.source_table}"
-                    cursor.execute(count_query)
-                    total_count = cursor.fetchone()[0]
+                    source_cursor.execute(count_query)
+                    total_count = source_cursor.fetchone()[0]
                     logger.info(f"Total records in source table {table_mapping.source_table}: {total_count}")
                     execution_logs.append(f"Starting to process {total_count} records from {table_mapping.source_table}")
 
@@ -601,51 +634,54 @@ class DataMaskingService:
                         return 0
 
                     # Re-execute the select query since we used cursor for count
-                    cursor.execute(select_query)
+                    source_cursor.execute(select_query)
 
-                    # Fetch data in batches
-                    batch_size = 1000
-                    batch_num = 0
+                    # Open destination connection once for all batches (performance optimization)
+                    logger.info(f"Connecting to destination PostgreSQL database...")
+                    with psycopg2.connect(dest_conn_str, connect_timeout=30) as dest_conn:
+                        # Fetch data in batches
+                        batch_size = 2000
+                        batch_num = 0
 
-                    while True:
-                        rows = cursor.fetchmany(batch_size)
-                        if not rows:
-                            break
+                        while True:
+                            rows = source_cursor.fetchmany(batch_size)
+                            if not rows:
+                                break
 
-                        batch_num += 1
-                        logger.info(f"Processing batch {batch_num}: {len(rows)} rows")
+                            batch_num += 1
+                            logger.info(f"Processing batch {batch_num}: {len(rows)} rows")
 
-                        # Process and mask data
-                        logger.info(f"Starting masking for batch {batch_num}...")
-                        masked_rows = self._mask_rows(rows, table_mapping)
-                        logger.info(f"Masking completed for batch {batch_num}, got {len(masked_rows)} masked rows")
+                            # Process and mask data
+                            logger.info(f"Starting masking for batch {batch_num}...")
+                            masked_rows = self._mask_rows(rows, table_mapping, dest_columns, column_max_lengths)
+                            logger.info(f"Masking completed for batch {batch_num}, got {len(masked_rows)} masked rows")
 
-                        # Insert masked data into destination
-                        try:
-                            self._insert_masked_data_sync(
-                                dest_conn_str, table_mapping.destination_table,
-                                dest_columns, masked_rows
+                            # Insert masked data into destination (pass connection object and cached identity_columns)
+                            try:
+                                self._insert_masked_data_postgresql(
+                                    dest_conn, table_mapping.destination_table,
+                                    dest_columns, masked_rows, identity_columns
+                                )
+                                logger.info(f"Successfully inserted batch {batch_num} into destination")
+                            except Exception as insert_error:
+                                error_msg = f"Failed to insert batch {batch_num}: {str(insert_error)}"
+                                logger.error(error_msg)
+                                execution_logs.append(error_msg)
+                                raise
+
+                            records_processed += len(masked_rows)
+
+                            # Log progress after each batch
+                            progress_pct = (records_processed / total_count * 100) if total_count > 0 else 100
+                            execution_logs.append(
+                                f"Processing batch {batch_num} for {table_mapping.source_table}: {records_processed}/{total_count} records ({progress_pct:.1f}%)"
                             )
-                            logger.info(f"Successfully inserted batch {batch_num} into destination")
-                        except Exception as insert_error:
-                            error_msg = f"Failed to insert batch {batch_num}: {str(insert_error)}"
-                            logger.error(error_msg)
-                            execution_logs.append(error_msg)
-                            raise
 
-                        records_processed += len(masked_rows)
+                            # Update database with current progress
+                            self._update_logs_sync(db, execution_id, execution_logs, records_processed, loop)
 
-                        # Log progress after each batch
-                        progress_pct = (records_processed / total_count * 100) if total_count > 0 else 100
-                        execution_logs.append(
-                            f"Processing batch {batch_num} for {table_mapping.source_table}: {records_processed}/{total_count} records ({progress_pct:.1f}%)"
-                        )
-
-                        # Update database with current progress
-                        self._update_logs_sync(db, execution_id, execution_logs, records_processed, loop)
-
-                    logger.info(f"Completed processing {records_processed} records from {table_mapping.source_table}")
-                    execution_logs.append(f"Successfully processed {records_processed} records")
+                        logger.info(f"Completed processing {records_processed} records from {table_mapping.source_table}")
+                        execution_logs.append(f"Successfully processed {records_processed} records")
 
             except psycopg2.Error as pg_error:
                 error_msg = f"PostgreSQL error processing table {table_mapping.source_table}: {str(pg_error)}"
@@ -660,15 +696,18 @@ class DataMaskingService:
 
         return records_processed
 
-    def _mask_rows(self, rows, table_mapping) -> List[List[Any]]:
+    def _mask_rows(
+        self,
+        rows,
+        table_mapping,
+        dest_columns: List[str] = None,
+        column_max_lengths: Dict[str, Optional[int]] = None
+    ) -> List[List[Any]]:
         """Mask PII data in rows"""
         masked_rows = []
         total_rows = len(rows)
 
         for row_num, row in enumerate(rows, 1):
-            if row_num % 25 == 0:  # Log every 25 rows
-                logger.info(f"Masking progress: {row_num}/{total_rows} rows")
-
             masked_row = list(row)
             # Apply masking to PII columns
             for i, col_mapping in enumerate(table_mapping.column_mappings):
@@ -684,6 +723,20 @@ class DataMaskingService:
                             # Handle different data types
                             if isinstance(masked_value, dict):
                                 masked_value = str(masked_value)
+
+                            # TRUNCATE if masked value exceeds column max length
+                            if dest_columns and column_max_lengths and i < len(dest_columns):
+                                dest_col_name = dest_columns[i]
+                                max_length = column_max_lengths.get(dest_col_name)
+
+                                if max_length and len(str(masked_value)) > max_length:
+                                    original_length = len(str(masked_value))
+                                    masked_value = str(masked_value)[:max_length]
+                                    logger.debug(
+                                        f"Truncated {col_mapping.destination_column} from "
+                                        f"{original_length} to {max_length} characters"
+                                    )
+
                             masked_row[i] = masked_value
                         except Exception as e:
                             logger.warning(f"Failed to mask column {col_mapping.source_column}: {e}")
@@ -794,7 +847,8 @@ class DataMaskingService:
         dest_conn_str: str,
         table_name: str,
         columns: List[str],
-        data: List[List[Any]]
+        data: List[List[Any]],
+        identity_columns: List[str] = None
     ):
         """Synchronous insert of masked data"""
         conn_type = self._get_connection_type(dest_conn_str)
@@ -803,9 +857,13 @@ class DataMaskingService:
             with pyodbc.connect(dest_conn_str, timeout=60) as dest_conn:
                 cursor = dest_conn.cursor()
 
-                # Detect and exclude identity columns
-                identity_columns = self._get_identity_columns(dest_conn_str, table_name)
-                logger.info(f"Identity columns detected: {identity_columns}")
+                # Enable fast_executemany for better performance
+                cursor.fast_executemany = True
+
+                # Use cached identity columns if provided, otherwise query
+                if identity_columns is None:
+                    identity_columns = self._get_identity_columns(dest_conn_str, table_name)
+                logger.info(f"Identity columns: {identity_columns}")
 
                 # Filter out identity columns
                 filtered_columns = [col for col in columns if col not in identity_columns]
@@ -834,86 +892,90 @@ class DataMaskingService:
                 logger.info(f"Successfully inserted {len(filtered_data)} rows")
 
         elif conn_type == "postgresql":
+            # For PostgreSQL, use _insert_masked_data_postgresql with connection object
+            # This is kept for backwards compatibility but not recommended
             dest_conn = None
             try:
                 logger.info(f"Connecting to destination PostgreSQL database for insert...")
-
-                # Detect and exclude identity/serial columns
-                identity_columns = self._get_identity_columns(dest_conn_str, table_name)
-                logger.info(f"Identity columns detected: {identity_columns}")
-
-                # Filter out identity columns
-                filtered_columns = [col for col in columns if col not in identity_columns]
-
-                # Get column indices to filter data
-                identity_indices = [i for i, col in enumerate(columns) if col in identity_columns]
-
-                # Filter data rows
-                filtered_data = []
-                for row in data:
-                    filtered_row = [row[i] for i in range(len(row)) if i not in identity_indices]
-                    filtered_data.append(filtered_row)
-
-                logger.info(f"Columns after filtering: {filtered_columns}")
-                logger.info(f"Using {len(filtered_columns)} columns (excluded {len(identity_columns)} identity columns)")
-
-                # Create connection with proper error handling
                 dest_conn = psycopg2.connect(dest_conn_str, connect_timeout=30)
-                cursor = dest_conn.cursor()
-
-                # Build INSERT query without identity columns
-                placeholders = ', '.join(['%s' for _ in filtered_columns])
-                quoted_columns = ', '.join([f'"{col}"' for col in filtered_columns])
-                insert_query = f'INSERT INTO "{table_name}" ({quoted_columns}) VALUES ({placeholders})'
-
-                logger.info(f"Inserting {len(filtered_data)} rows into {table_name}")
-                logger.debug(f"INSERT query: {insert_query}")
-                logger.debug(f"Sample filtered row: {filtered_data[0] if filtered_data else 'No data'}")
-
-                # Use simple executemany
-                logger.info(f"Starting executemany for {len(filtered_data)} rows...")
-                cursor.executemany(insert_query, filtered_data)
-                logger.info(f"Executemany completed, committing...")
-
-                # Commit the transaction
-                dest_conn.commit()
-                logger.info(f"Committed successfully - {len(filtered_data)} rows inserted into {table_name}")
-
-            except psycopg2.Error as pg_error:
-                error_msg = f"PostgreSQL insert error for table {table_name}: {pg_error}"
-                logger.error(error_msg)
-                if 'insert_query' in locals():
-                    logger.error(f"Query: {insert_query}")
-                if 'filtered_data' in locals() and filtered_data:
-                    logger.error(f"Sample data: {filtered_data[0]}")
-
-                # Rollback on error
-                if dest_conn:
-                    try:
-                        dest_conn.rollback()
-                        logger.info("Transaction rolled back")
-                    except:
-                        pass
-                raise
+                self._insert_masked_data_postgresql(dest_conn, table_name, columns, data, identity_columns)
+                dest_conn.close()
             except Exception as e:
-                error_msg = f"Unexpected insert error for table {table_name}: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-
-                # Rollback on error
-                if dest_conn:
-                    try:
-                        dest_conn.rollback()
-                        logger.info("Transaction rolled back")
-                    except:
-                        pass
-                raise
-            finally:
-                # Close connection
                 if dest_conn:
                     try:
                         dest_conn.close()
                     except:
                         pass
+                raise
+
+    def _insert_masked_data_postgresql(
+        self,
+        dest_conn,
+        table_name: str,
+        columns: List[str],
+        data: List[List[Any]],
+        identity_columns: List[str] = None
+    ):
+        """Insert masked data into PostgreSQL using existing connection (performance optimized)"""
+        try:
+            # Use cached identity columns if provided, otherwise query
+            if identity_columns is None:
+                conn_str = f"postgresql://{dest_conn.info.user}@{dest_conn.info.host}:{dest_conn.info.port}/{dest_conn.info.dbname}"
+                identity_columns = self._get_identity_columns(conn_str, table_name)
+            logger.info(f"Identity columns: {identity_columns}")
+
+            # Filter out identity columns
+            filtered_columns = [col for col in columns if col not in identity_columns]
+
+            # Get column indices to filter data
+            identity_indices = [i for i, col in enumerate(columns) if col in identity_columns]
+
+            # Filter data rows
+            filtered_data = []
+            for row in data:
+                filtered_row = [row[i] for i in range(len(row)) if i not in identity_indices]
+                filtered_data.append(filtered_row)
+
+            logger.info(f"Using {len(filtered_columns)} columns (excluded {len(identity_columns)} identity columns)")
+
+            cursor = dest_conn.cursor()
+
+            # Build INSERT query without identity columns
+            placeholders = ', '.join(['%s' for _ in filtered_columns])
+            quoted_columns = ', '.join([f'"{col}"' for col in filtered_columns])
+            insert_query = f'INSERT INTO "{table_name}" ({quoted_columns}) VALUES ({placeholders})'
+
+            logger.debug(f"INSERT query: {insert_query}")
+
+            # Use executemany for batch insert
+            cursor.executemany(insert_query, filtered_data)
+
+            # Commit the transaction
+            dest_conn.commit()
+            logger.debug(f"Committed {len(filtered_data)} rows into {table_name}")
+
+        except psycopg2.Error as pg_error:
+            error_msg = f"PostgreSQL insert error for table {table_name}: {pg_error}"
+            logger.error(error_msg)
+
+            # Rollback on error
+            try:
+                dest_conn.rollback()
+                logger.info("Transaction rolled back")
+            except:
+                pass
+            raise
+        except Exception as e:
+            error_msg = f"Unexpected insert error for table {table_name}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+
+            # Rollback on error
+            try:
+                dest_conn.rollback()
+                logger.info("Transaction rolled back")
+            except:
+                pass
+            raise
 
     def generate_sample_masked_data(
         self,
