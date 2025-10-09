@@ -217,13 +217,45 @@ async def delete_masking_workflow(
         )
 
 
+async def _execute_workflow_background(
+    workflow_id: int,
+    execution_id: int,
+    user_id: int
+):
+    """Background task to execute workflow"""
+    # Create a new database session for the background task
+    from ...core.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        masking_service = DataMaskingService()
+
+        try:
+            execution_result = await masking_service.execute_workflow(
+                db=db,
+                workflow_id=workflow_id,
+                user_id=user_id,
+                execution_id=execution_id
+            )
+
+            logger.info(
+                f"Workflow execution completed in background: workflow_id={workflow_id}, "
+                f"execution_id={execution_id}, records_processed={execution_result.records_processed}"
+            )
+
+        except Exception as e:
+            logger.error(f"Background workflow execution failed: {e}", exc_info=True)
+            # Exception is already handled in masking_service.execute_workflow
+            # which updates the execution status to FAILED
+
+
 @router.post("/{workflow_id}/execute", response_model=ExecuteWorkflowResponse)
 async def execute_masking_workflow(
     workflow_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user)
 ):
-    """Execute a masking workflow synchronously"""
+    """Execute a masking workflow in the background"""
     if not check_permission(current_user, "execute"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -249,37 +281,26 @@ async def execute_masking_workflow(
     from ..models.workflow import WorkflowStatus
     execution = await create_workflow_execution(db, workflow_id, current_user.id, WorkflowStatus.RUNNING)
 
-    # Execute workflow directly (synchronously)
-    masking_service = DataMaskingService()
+    # Add the workflow execution task to background tasks
+    background_tasks.add_task(
+        _execute_workflow_background,
+        workflow_id,
+        execution.id,
+        current_user.id
+    )
 
-    try:
-        execution_result = await masking_service.execute_workflow(
-            db=db,
-            workflow_id=workflow_id,
-            user_id=current_user.id,
-            execution_id=execution.id
-        )
+    logger.info(
+        f"Workflow execution started in background: workflow_id={workflow_id}, "
+        f"execution_id={execution.id}"
+    )
 
-        logger.info(
-            f"Workflow execution completed: workflow_id={workflow_id}, "
-            f"execution_id={execution.id}, records_processed={execution_result.records_processed}"
-        )
-
-        return ExecuteWorkflowResponse(
-            execution_id=execution.id,
-            workflow_id=workflow_id,
-            message=f"Workflow execution completed successfully. {execution_result.records_processed} records processed.",
-            status="completed"
-        )
-    except Exception as e:
-        logger.error(f"Workflow execution failed: {e}", exc_info=True)
-
-        return ExecuteWorkflowResponse(
-            execution_id=execution.id,
-            workflow_id=workflow_id,
-            message=f"Workflow execution failed: {str(e)}",
-            status="failed"
-        )
+    # Return immediately with processing status
+    return ExecuteWorkflowResponse(
+        execution_id=execution.id,
+        workflow_id=workflow_id,
+        message=f"Workflow execution started in background. Use execution ID {execution.id} to check status.",
+        status="processing"
+    )
 
 
 @router.get("/{workflow_id}/executions", response_model=List[WorkflowExecutionResponse])
