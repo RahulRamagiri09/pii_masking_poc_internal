@@ -1,0 +1,69 @@
+CREATE TABLE person_details (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    first_name NVARCHAR(50),
+    last_name NVARCHAR(50),
+    address NVARCHAR(100),
+    city NVARCHAR(50),
+    company NVARCHAR(100),
+    company_email NVARCHAR(100),
+    country NVARCHAR(50),
+    country_code NVARCHAR(10),
+    date_of_birth DATE,
+    email NVARCHAR(100),
+    name NVARCHAR(100),
+    passport_dob DATE,
+    passport_full NVARCHAR(100),
+    passport_gender NVARCHAR(10),
+    passport_number NVARCHAR(20),
+    passport_owner NVARCHAR(100),
+    postal_code NVARCHAR(20),
+    postcode NVARCHAR(20),
+    profile NVARCHAR(100),
+    secondary_address NVARCHAR(100),
+    ssn NVARCHAR(20),
+    state NVARCHAR(50),
+    street_name NVARCHAR(100)
+);
+
+
+
+
+;WITH Numbers AS (
+    SELECT TOP (100) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
+    FROM sys.objects
+)
+INSERT INTO person_details (
+    first_name, last_name, address, city, company, company_email,
+    country, country_code, date_of_birth, email, name, passport_dob,
+    passport_full, passport_gender, passport_number, passport_owner,
+    postal_code, postcode, profile, secondary_address, ssn, state, street_name
+)
+SELECT
+    'FirstName_' + CAST(n AS NVARCHAR(5)),
+    'LastName_' + CAST(n AS NVARCHAR(5)),
+    'Address_' + CAST(n AS NVARCHAR(5)),
+    'City_' + CAST((ABS(CHECKSUM(NEWID())) % 50) + 1 AS NVARCHAR(3)),
+    'Company_' + CAST(n AS NVARCHAR(5)),
+    'user' + CAST(n AS NVARCHAR(5)) + '@company.com',
+    CASE WHEN n % 5 = 0 THEN 'USA'
+         WHEN n % 5 = 1 THEN 'India'
+         WHEN n % 5 = 2 THEN 'UK'
+         WHEN n % 5 = 3 THEN 'Canada'
+         ELSE 'Germany' END,
+    '+' + CAST(100 + n AS NVARCHAR(10)),
+    DATEADD(DAY, -1 * (ABS(CHECKSUM(NEWID())) % 12000), GETDATE()),
+    'email' + CAST(n AS NVARCHAR(5)) + '@mail.com',
+    'Name_' + CAST(n AS NVARCHAR(5)),
+    DATEADD(DAY, -1 * (ABS(CHECKSUM(NEWID())) % 12000), GETDATE()),
+    'PassportFull_' + CAST(n AS NVARCHAR(5)),
+    CASE WHEN n % 2 = 0 THEN 'Male' ELSE 'Female' END,
+    'P' + CAST(100000 + n AS NVARCHAR(10)),
+    'Owner_' + CAST(n AS NVARCHAR(5)),
+    CAST(500000 + n AS NVARCHAR(20)),
+    CAST(500000 + n AS NVARCHAR(20)),
+    'Profile_' + CAST(n AS NVARCHAR(5)),
+    'SecAddr_' + CAST(n AS NVARCHAR(5)),
+    CAST(100000000 + n AS NVARCHAR(20)),
+    'State_' + CAST(n AS NVARCHAR(5)),
+    'Street_' + CAST(n AS NVARCHAR(5))
+FROM Numbers;

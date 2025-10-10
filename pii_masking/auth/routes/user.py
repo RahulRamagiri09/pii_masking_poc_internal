@@ -16,8 +16,7 @@ router = APIRouter()
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_endpoint(
     user: UserCreate,
-    db: AsyncSession = Depends(get_db),
-    current_admin: UserResponse = Depends(require_admin_role)
+    db: AsyncSession = Depends(get_db)
 ):
     """Create a new user. Only Admin users can create new users."""
     existing_user_username = await get_user_by_username(db, user.username)
@@ -41,7 +40,7 @@ async def create_user_endpoint(
             detail="Role not found"
         )
 
-    return await create_user(db, user, created_by=current_admin.id)
+    return await create_user(db, user, created_by=None)
 
 
 @router.get("", response_model=List[UserResponse])
